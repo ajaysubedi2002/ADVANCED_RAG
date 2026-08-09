@@ -1,0 +1,24 @@
+# Django environments and local settings
+.env
+db.sqlite3
+*.log
+
+# ChromaDB and Vector Stores
+.chroma/
+chroma_db/
+chromadb/
+
+# Python caching and virtual environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+ENV/
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

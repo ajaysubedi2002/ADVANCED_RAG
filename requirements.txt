@@ -1,0 +1,10 @@
+django
+djangorestframework
+langchain
+langchain-google-genai
+langgraph
+python-dotenv
+chromadb
+langchain_core
+langchain_ollama
+
