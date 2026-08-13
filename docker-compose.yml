@@ -1,0 +1,142 @@
+services:
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama_rag
+
+    env_file:
+      - ./.env
+
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "all"
+      NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
+
+    volumes:
+      - ollama-data:/root/.ollama
+      - ./scripts/ollama-entrypoint.sh:/ollama-entrypoint.sh:ro
+
+    entrypoint:
+      - /bin/sh
+      - /ollama-entrypoint.sh
+
+    ports:
+      - "11435:11434"
+
+    restart: unless-stopped
+
+    networks:
+      - app-network
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities:
+                - gpu
+
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres_rag
+
+    env_file:
+      - ./.env
+
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+    ports:
+      - "5444:5432"
+
+    restart: unless-stopped
+
+    networks:
+      - app-network
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis_rag
+
+    command: ["redis-server", "--appendonly", "yes"]
+
+    volumes:
+      - redis-data:/data
+
+    ports:
+      - "6380:6379"
+
+    restart: unless-stopped
+
+    networks:
+      - app-network
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+
+  api:
+    build:
+      context: .
+      dockerfile: ./api/docker/dockerfile
+
+    container_name: rag_api
+
+    env_file:
+      - ./.env
+  
+    volumes:
+      - reranker-data:/models
+
+    depends_on:
+      ollama:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    ports:
+      - "8000:8000"
+
+    restart: unless-stopped
+
+    networks:
+      - app-network
+
+
+volumes:
+  ollama-data:
+    name: rag-ollama-data
+  postgres-data:
+    name: rag-postgres-data
+  redis-data:
+    name: rag-redis-data
+  reranker-data:
+    name: rag-reranker-data
+
+
+networks:
+  app-network:
+    name: rag-network
+    driver: bridge
