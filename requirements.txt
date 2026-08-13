@@ -1,5 +1,7 @@
 django
 djangorestframework
+drf-spectacular
+psycopg
 langchain
 langchain-google-genai
 langgraph
@@ -7,4 +9,8 @@ python-dotenv
 chromadb
 langchain_core
 langchain_ollama
-
+torch
+transformers
+sentence-transformers
+huggingface-hub
+pdfplumber
