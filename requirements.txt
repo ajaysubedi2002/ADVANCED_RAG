@@ -1,16 +1,51 @@
-django
-djangorestframework
-drf-spectacular
-psycopg
-langchain
-langchain-google-genai
-langgraph
-python-dotenv
-chromadb
-langchain_core
-langchain_ollama
-torch
-transformers
-sentence-transformers
-huggingface-hub
-pdfplumber
+# Web framework
+django==5.1.4
+djangorestframework==3.15.2
+drf-spectacular==0.27.2
+
+# Database
+psycopg[binary]==3.2.3
+
+# Cache
+redis==5.2.0
+
+# Settings management
+pydantic-settings==2.6.1
+pydantic==2.9.2
+python-dotenv==1.0.1
+
+# Ollama LLM + Embeddings
+ollama==0.4.4
+
+# Vector store
+chromadb==0.5.20
+
+# Sparse retrieval
+rank-bm25==0.2.2
+
+# Reranker / sentence-transformers
+torch==2.4.1
+transformers==4.46.3
+sentence-transformers==3.3.1
+huggingface-hub==0.26.2
+
+# Document parsing
+pdfplumber==0.11.4
+
+# Production server
+gunicorn==23.0.0
+
+# LangChain – Ollama wrapper + LangSmith auto-tracing
+langchain-core==0.3.33
+langchain-ollama==0.2.3
+
+# Observability
+structlog==24.4.0
+langsmith==0.1.147
+
+# Testing
+pytest==8.3.4
+pytest-django==4.9.0
+pytest-mock==3.14.0
+
+langsmith
