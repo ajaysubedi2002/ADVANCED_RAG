@@ -24,3 +24,6 @@ ENV/
 Thumbs.db
 .md
 md /
+.pytest_cacheb 
+.venv
+migrations/
