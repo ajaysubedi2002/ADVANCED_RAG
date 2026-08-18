@@ -1,20 +1,48 @@
-# Use the official Python runtime image
+# =============================================================================
+# Advanced RAG API – Production Dockerfile
+# =============================================================================
 FROM python:3.12-slim
 
+# Prevent .pyc files and buffer issues
 ENV PYTHONDONTWRITEBYTECODE=1
-# Prevents Python from buffering stdout and stderr
 ENV PYTHONUNBUFFERED=1
+# Disable HuggingFace progress bars in CI/Docker
+ENV TRANSFORMERS_VERBOSITY=error
+ENV HF_HUB_DISABLE_PROGRESS_BARS=1
 
-# Create the app directory
 WORKDIR /app
 
+# System dependencies: libpq for psycopg, curl for healthcheck
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libpq5 \
+        libpq-dev \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip before installing dependencies
 RUN pip install --upgrade pip
 
+# Install Python dependencies (cached layer)
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy application source
 COPY . /app/
 
+# Create directories for persistent data
+RUN mkdir -p /models/chroma_db /models/bm25
+
+# Run migrations and start Gunicorn
+# Override CMD in docker-compose for development (manage.py runserver)
 EXPOSE 8000
 
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+CMD ["sh", "-c", \
+    "python manage.py migrate --noinput && \
+     gunicorn config.wsgi:application \
+       --bind 0.0.0.0:8000 \
+       --workers 2 \
+       --threads 4 \
+       --timeout 120 \
+       --access-logfile - \
+       --error-logfile -"]
