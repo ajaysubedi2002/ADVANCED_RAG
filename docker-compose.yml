@@ -3,90 +3,68 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: ollama_rag
-
-    env_file:
-      - ./.env
-
+    env_file: .env
     environment:
       NVIDIA_VISIBLE_DEVICES: "all"
       NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
-
     volumes:
       - ollama-data:/root/.ollama
       - ./scripts/ollama-entrypoint.sh:/ollama-entrypoint.sh:ro
-
-    entrypoint:
-      - /bin/sh
-      - /ollama-entrypoint.sh
-
+    entrypoint: ["/bin/sh", "/ollama-entrypoint.sh"]
     ports:
       - "11435:11434"
-
     restart: unless-stopped
-
     networks:
       - app-network
-
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
               count: all
-              capabilities:
-                - gpu
-
+              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "ollama", "list"]
-      interval: 10s
-      timeout: 5s
+      interval: 15s
+      timeout: 10s
       retries: 10
-      start_period: 15s
+      start_period: 30s
 
-
+  # PostgreSQL – application metadata (documents, chunks)
   postgres:
     image: postgres:16-alpine
     container_name: postgres_rag
-
-    env_file:
-      - ./.env
-
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-rag_db}
+      POSTGRES_USER: ${POSTGRES_USER:-rag_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_this}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-
     ports:
       - "5444:5432"
-
     restart: unless-stopped
-
     networks:
       - app-network
-
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag_user} -d ${POSTGRES_DB:-rag_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
 
-
+  # Redis – query/embedding cache and distributed locks
   redis:
     image: redis:7-alpine
     container_name: redis_rag
-
-    command: ["redis-server", "--appendonly", "yes"]
-
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
     volumes:
       - redis-data:/data
-
     ports:
       - "6380:6379"
-
     restart: unless-stopped
-
     networks:
       - app-network
-
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -94,20 +72,30 @@ services:
       retries: 5
       start_period: 5s
 
-
+  # Django RAG API
   api:
     build:
       context: .
       dockerfile: ./api/docker/dockerfile
-
     container_name: rag_api
-
-    env_file:
-      - ./.env
-  
+    env_file: .env
+    command:
+      - sh
+      - -c
+      - |
+        python manage.py migrate --noinput &&
+        python manage.py collectstatic --noinput &&
+        gunicorn config.wsgi:application \
+          --bind 0.0.0.0:8000 \
+          --workers 2 \
+          --threads 4 \
+          --timeout 120 \
+          --reload \
+          --access-logfile - \
+          --error-logfile -
     volumes:
-      - reranker-data:/models
-
+      - models-data:/models
+      - .:/app
     depends_on:
       ollama:
         condition: service_healthy
@@ -115,15 +103,38 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-
     ports:
       - "8000:8000"
-
     restart: unless-stopped
-
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+      
+  # BGE Reranker – runs as a separate inference service
 
+  reranker:
+    build:
+      context: .
+      dockerfile: ./api/docker/dockerfile
+    container_name: reranker_rag
+    env_file: .env
+    environment:
+      # Override so the reranker container starts the scoring server
+      RERANKER_DEVICE: cpu
+    command: ["python", "-m", "app.reranker_server"]
+    volumes:
+      - models-data:/models
+    restart: unless-stopped
+    networks:
+      - app-network
+    profiles:
+      # Only start when explicitly requested: docker compose --profile reranker up
+      - reranker
 
 volumes:
   ollama-data:
@@ -132,9 +143,8 @@ volumes:
     name: rag-postgres-data
   redis-data:
     name: rag-redis-data
-  reranker-data:
-    name: rag-reranker-data
-
+  models-data:
+    name: rag-models-data
 
 networks:
   app-network:
