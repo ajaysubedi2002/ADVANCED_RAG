@@ -1,27 +1,9 @@
-from sentence_transformers import SentenceTransformer
-from config import settings
+"""
+Backwards-compatibility shim.
 
-class EmbeddingModel:
+The embedding implementation has moved to ``app.ingestion.embedding_service``.
+``EmbeddingModel`` is re-exported here so old imports continue to work.
+"""
+from app.ingestion.embedding_service import EmbeddingService as EmbeddingModel  # noqa: F401
 
-    def __init__(
-        self,
-        model_name = settings.EMBED_MODEL
-    ):
-
-        self.model = SentenceTransformer(
-            model_name
-        )
-
-    def embed_documents(self, texts):
-
-        return self.model.encode(
-            texts,
-            normalize_embeddings=True
-        )
-
-    def embed_query(self, query):
-
-        return self.model.encode(
-            query,
-            normalize_embeddings=True
-        )
+__all__ = ["EmbeddingModel"]

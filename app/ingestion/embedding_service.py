@@ -1,19 +1,3 @@
-"""
-Embedding service – thin, validated wrapper around Ollama embeddings.
-
-Design decisions
-----------------
-* No module-level singleton that calls Ollama on import.  Callers must
-  instantiate ``EmbeddingService`` explicitly (or use the DI helpers in
-  ``app/services/document_service.py``).
-* All array truth-value checks use ``len(x) == 0`` or ``x is None`` – never
-  ``if embeddings:`` which raises an ambiguous truth-value error for NumPy.
-* Embedding dimensions are validated on every call so mismatches are caught
-  early rather than silently inserted into ChromaDB.
-* Batch support: ``embed_documents`` accepts any number of texts and handles
-  list normalisation from Ollama's response schema.
-"""
-
 from __future__ import annotations
 
 import logging

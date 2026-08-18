@@ -103,7 +103,6 @@ class BM25Index:
         )
 
     # Internal: BM25 rebuild
-
     def _rebuild(self) -> None:
         """Rebuild the BM25Okapi object from the current chunk list."""
         if not self._chunks:

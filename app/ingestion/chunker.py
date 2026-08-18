@@ -1,23 +1,8 @@
-"""
-Parent / child chunker.
-
-Splits a ``ParsedDocument`` into a two-level hierarchy:
-
-  Parent chunks  – larger context windows (PARENT_CHUNK_SIZE words)
-  Child chunks   – smaller retrieval units (CHILD_CHUNK_SIZE words)
-                   generated from each parent
-
-All IDs are deterministic SHA-256 → UUID5 digests so re-ingesting the
-same document produces the same IDs and Chroma can safely upsert.
-
-Sizes default to the values in ``runtime_settings`` but can be overridden
-per-call for testing or API-level configuration.
-"""
-
 from __future__ import annotations
 
 import hashlib
 import logging
+import re
 import uuid
 from typing import List, Tuple
 
@@ -90,6 +75,38 @@ def split_text(
     return chunks
 
 
+def split_layout_aware(
+    text: str,
+    chunk_size: int = 300,
+    overlap: int = 50,
+) -> List[str]:
+    """
+    Split text while preserving logical section boundaries.
+
+    The input is first segmented on blank lines, so heading/paragraph blocks stay
+    together. Large blocks are then further split with the usual word-window logic
+    to enforce the target chunk size.
+    """
+    if not text or chunk_size <= 0:
+        return []
+
+    normalized = "\n".join(part.strip() for part in text.splitlines())
+    blocks = [block.strip() for block in re.split(r"\n\s*\n+", normalized) if block.strip()]
+    if not blocks:
+        return []
+
+    chunks: List[str] = []
+    for block in blocks:
+        words = block.split()
+        if len(words) <= chunk_size:
+            chunks.append(block)
+            continue
+
+        chunks.extend(split_text(block, chunk_size=chunk_size, overlap=overlap))
+
+    return chunks
+
+
 # Parent / child hierarchy builder
 def create_parent_child_chunks(
     document_id: str,
@@ -148,14 +165,14 @@ def create_parent_child_chunks(
         parent_id = _stable_id(f"{document_id}:parent:{parent_index}", parent_text)
         pages = raw.get("pages", [])
 
-        parents.append(ParentChunk(
+        parents.append(ParentChunk( 
             id=parent_id,
             document_id=document_id,
             text=parent_text,
             metadata={"pages": pages, "index": parent_index},
         ))
 
-        child_texts = split_text(parent_text, chunk_size=child_size, overlap=overlap)
+        child_texts = split_layout_aware(parent_text, chunk_size=child_size, overlap=overlap)
         if not child_texts:
             logger.warning(
                 "Parent chunk %s produced no children (text length=%d)",
